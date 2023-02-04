@@ -1,26 +1,41 @@
-# Use the latest 2.1 version of CircleCI pipeline process engine.
-# See: https://circleci.com/docs/2.0/configuration-reference
 version: 2.1
 
-# Define a job to be invoked later in a workflow.
-# See: https://circleci.com/docs/2.0/configuration-reference/#jobs
+orbs:
+  android: circleci/android@2.1.2
+
 jobs:
-  say-hello:
-    # Specify the execution environment. You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
-    # See: https://circleci.com/docs/2.0/configuration-reference/#docker-machine-macos-windows-executor
-    docker:
-      - image: cimg/base:stable
-    # Add steps to the job
-    # See: https://circleci.com/docs/2.0/configuration-reference/#steps
+  android-test:
+    environment:
+      _JAVA_OPTIONS: "-Xmx3g"
+    executor:
+      name: android/android-machine
+      resource-class: large
+      # https://circleci.com/developer/images/image/cimg/android#image-tags
+      tag: 2022.12.1
     steps:
       - checkout
-      - run:
-          name: "Say hello"
-          command: "echo Hello, World!"
+      - run: chmod +x gradlew
 
-# Invoke jobs via workflows
-# See: https://circleci.com/docs/2.0/configuration-reference/#workflows
+      # See source command: https://circleci.com/developer/orbs/orb/circleci/android#commands-start-emulator-and-run-tests
+      - android/start-emulator-and-run-tests:
+          post-emulator-launch-assemble-command: ./gradlew app:assembleDebugAndroidTest --no-daemon
+          test-command: ./gradlew app:createDebugAndroidTestCoverageReport --stacktrace --no-daemon
+      #          system-image: system-images;android-30;google_apis;x86
+
+      - run:
+          name: Save test results
+          command: |
+            mkdir -p ~/test-results/junit/
+            find . -type f -regex ".*/app/build/outputs/androidTest-results/.*xml" -exec cp {} ~/test-results/junit/ \;
+          when: always
+
+      - store_test_results:
+          path: ~/test-results
+
+      - store_artifacts:
+          path: ~/test-results/junit
+
 workflows:
-  say-hello-workflow:
+  test-and-build:
     jobs:
-      - say-hello
+      - android-test
