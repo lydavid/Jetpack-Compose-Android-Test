@@ -1,0 +1,41 @@
+version: 2.1
+
+orbs:
+  android: circleci/android@2.1.2
+
+jobs:
+  android-test:
+    environment:
+      _JAVA_OPTIONS: "-Xmx3g"
+    executor:
+      name: android/android-machine
+      resource-class: large
+      # https://circleci.com/developer/images/image/cimg/android#image-tags
+      tag: 2022.12.1
+    steps:
+      - checkout
+      - run: chmod +x gradlew
+
+      # See source command: https://circleci.com/developer/orbs/orb/circleci/android#commands-start-emulator-and-run-tests
+      - android/start-emulator-and-run-tests:
+          post-emulator-launch-assemble-command: ./gradlew app:assembleDebugAndroidTest --no-daemon
+          test-command: ./gradlew app:createDebugAndroidTestCoverageReport --stacktrace --no-daemon
+      #          system-image: system-images;android-30;google_apis;x86
+
+      - run:
+          name: Save test results
+          command: |
+            mkdir -p ~/test-results/junit/
+            find . -type f -regex ".*/app/build/outputs/androidTest-results/.*xml" -exec cp {} ~/test-results/junit/ \;
+          when: always
+
+      - store_test_results:
+          path: ~/test-results
+
+      - store_artifacts:
+          path: ~/test-results/junit
+
+workflows:
+  test-and-build:
+    jobs:
+      - android-test
